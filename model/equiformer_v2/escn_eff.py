@@ -4,6 +4,7 @@ Copyright (c) Meta, Inc. and its affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
+
 from __future__ import annotations
 
 import math
@@ -37,14 +38,13 @@ from .so3 import (
 
 # Statistics of IS2RE 100K
 _AVG_NUM_NODES = 77.81317
-_AVG_DEGREE    = 20
+_AVG_DEGREE = 20
 
 
 class ModuleListInfo(torch.nn.ModuleList):
     def __init__(self, info_str, modules=None):
         super().__init__(modules)
         self.info_str = str(info_str)
-
 
     def __repr__(self):
         return self.info_str
@@ -79,9 +79,9 @@ class eSCNEfficient(BaseModel):
 
     def __init__(
         self,
-        num_atoms,      # not used
+        num_atoms,  # not used
         bond_feat_dim,  # not used
-        num_targets,    # not used
+        num_targets,  # not used
         use_pbc=True,
         regress_forces=True,
         otf_graph=False,
@@ -124,7 +124,7 @@ class eSCNEfficient(BaseModel):
         self.sphere_channels_all = self.num_resolutions * self.sphere_channels
         self.basis_width_scalar = basis_width_scalar
         self.distance_function = distance_function
-        self.device = "cpu" #torch.cuda.current_device()
+        self.device = "cpu"  # torch.cuda.current_device()
 
         # variables used for display purposes
         self.counter = 0
@@ -133,7 +133,9 @@ class eSCNEfficient(BaseModel):
         self.act = nn.SiLU()
 
         # Weights for message initialization
-        self.sphere_embedding = nn.Embedding(self.max_num_elements, self.sphere_channels_all)
+        self.sphere_embedding = nn.Embedding(
+            self.max_num_elements, self.sphere_channels_all
+        )
 
         # Initialize the function used to measure the distances between atoms
         assert self.distance_function in [
@@ -178,10 +180,14 @@ class eSCNEfficient(BaseModel):
             self.SO3_rotation.append(SO3_Rotation(self.lmax_list[i]))
 
         # Initialize conversion between degree l and order m layouts
-        self.mappingReduced = CoefficientMappingModule(self.lmax_list, self.mmax_list) #, self.device)
+        self.mappingReduced = CoefficientMappingModule(
+            self.lmax_list, self.mmax_list
+        )  # , self.device)
 
         # Initialize the transformations between spherical and grid representations
-        self.SO3_grid = ModuleListInfo(f"({max(self.lmax_list)}, {max(self.lmax_list)})")
+        self.SO3_grid = ModuleListInfo(
+            f"({max(self.lmax_list)}, {max(self.lmax_list)})"
+        )
         for l in range(max(self.lmax_list) + 1):
             SO3_m_grid = nn.ModuleList()
             for m in range(max(self.lmax_list) + 1):
@@ -217,9 +223,7 @@ class eSCNEfficient(BaseModel):
             )
 
         # Create a roughly evenly distributed point sampling of the sphere for the output blocks
-        sphere_points = CalcSpherePoints(
-            self.num_sphere_samples, self.device
-        ).detach()
+        sphere_points = CalcSpherePoints(self.num_sphere_samples, self.device).detach()
         self.register_buffer("sphere_points", sphere_points)
 
         # For each spherical point, compute the spherical harmonic coefficient weights
@@ -234,7 +238,6 @@ class eSCNEfficient(BaseModel):
             )
         sphharm_weights = torch.stack(sphharm_weights, dim=0)
         self.register_buffer("sphharm_weights", sphharm_weights)
-
 
     @conditional_grad(torch.enable_grad())
     def forward(self, data):
@@ -261,9 +264,7 @@ class eSCNEfficient(BaseModel):
         ###############################################################
 
         # Compute 3x3 rotation matrix per edge
-        edge_rot_mat = self._init_edge_rot_mat(
-            data, edge_index, edge_distance_vec
-        )
+        edge_rot_mat = self._init_edge_rot_mat(data, edge_index, edge_distance_vec)
 
         # Initialize the WignerD matrices and other values for spherical harmonic calculations
         for i in range(self.num_resolutions):
@@ -290,9 +291,9 @@ class eSCNEfficient(BaseModel):
             if self.num_resolutions == 1:
                 x.embedding[:, offset_res, :] = self.sphere_embedding(atomic_numbers)
             else:
-                x.embedding[:, offset_res, :] = self.sphere_embedding(
-                    atomic_numbers
-                )[:, offset : offset + self.sphere_channels]
+                x.embedding[:, offset_res, :] = self.sphere_embedding(atomic_numbers)[
+                    :, offset : offset + self.sphere_channels
+                ]
             offset = offset + self.sphere_channels
             offset_res = offset_res + int((self.lmax_list[i] + 1) ** 2)
 
@@ -337,7 +338,7 @@ class eSCNEfficient(BaseModel):
                     x_pt,
                     torch.einsum(
                         "abc, pb->apc",
-                        temp, #x.embedding[:, offset : offset + num_coefficients],
+                        temp,  # x.embedding[:, offset : offset + num_coefficients],
                         self.sphharm_weights[i],
                     ).contiguous(),
                 ],
@@ -354,7 +355,7 @@ class eSCNEfficient(BaseModel):
         energy = torch.zeros(len(data.natoms), device=pos.device)
         energy.index_add_(0, data.batch, node_energy.view(-1))
         # Scale energy to help balance numerical precision w.r.t. forces
-        #energy = energy * 0.001
+        # energy = energy * 0.001
         energy = energy / _AVG_NUM_NODES
 
         ###############################################################
@@ -376,11 +377,9 @@ class eSCNEfficient(BaseModel):
         else:
             return energy, forces
 
-
     # Initialize the edge rotation matrics
     def _init_edge_rot_mat(self, data, edge_index, edge_distance_vec):
         return init_edge_rot_mat(edge_distance_vec)
-
 
     @property
     def num_params(self):
@@ -429,8 +428,8 @@ class LayerBlock(torch.nn.Module):
         self.num_resolutions = len(lmax_list)
         self.sphere_channels = sphere_channels
         self.sphere_channels_all = self.num_resolutions * self.sphere_channels
-        #self.SO3_rotation = SO3_rotation
-        #self.mappingReduced = mappingReduced
+        # self.SO3_rotation = SO3_rotation
+        # self.mappingReduced = mappingReduced
         self.SO3_grid = SO3_grid
 
         # Message block
@@ -469,7 +468,6 @@ class LayerBlock(torch.nn.Module):
         edge_distance,
         edge_index,
     ):
-
         # Compute messages by performing message block
         x_message = self.message_block(
             x,
@@ -573,13 +571,7 @@ class MessageBlock(torch.nn.Module):
             self.act,
         )
 
-    def forward(
-        self,
-        x,
-        atomic_numbers,
-        edge_distance,
-        edge_index
-    ):
+    def forward(self, x, atomic_numbers, edge_distance, edge_index):
         ###############################################################
         # Compute messages
         ###############################################################
@@ -659,18 +651,12 @@ class SO2Block(torch.nn.Module):
         num_channels_m0 = 0
         for i in range(self.num_resolutions):
             num_coefficients = self.lmax_list[i] + 1
-            num_channels_m0 = (
-                num_channels_m0 + num_coefficients * self.sphere_channels
-            )
+            num_channels_m0 = num_channels_m0 + num_coefficients * self.sphere_channels
 
         # SO(2) convolution for m=0
         self.fc1_dist0 = Linear(edge_channels, self.hidden_channels)
-        self.fc1_m0 = Linear(
-            num_channels_m0, self.hidden_channels, bias=False
-        )
-        self.fc2_m0 = Linear(
-            self.hidden_channels, num_channels_m0, bias=False
-        )
+        self.fc1_m0 = Linear(num_channels_m0, self.hidden_channels, bias=False)
+        self.fc2_m0 = Linear(self.hidden_channels, num_channels_m0, bias=False)
 
         # SO(2) convolution for non-zero m
         self.so2_conv = nn.ModuleList()
@@ -686,13 +672,7 @@ class SO2Block(torch.nn.Module):
             )
             self.so2_conv.append(so2_conv)
 
-
-    def forward(
-        self,
-        x,
-        x_edge
-    ):
-
+    def forward(self, x, x_edge):
         num_edges = len(x_edge)
 
         # Reshape the spherical harmonics based on m (order)
@@ -703,8 +683,8 @@ class SO2Block(torch.nn.Module):
         # Compute edge scalar features for m=0
         x_edge_0 = self.act(self.fc1_dist0(x_edge))
 
-        #x_0 = x.embedding[:, 0 : mappingReduced.m_size[0]].contiguous()
-        #x_0 = x_0.view(num_edges, -1)
+        # x_0 = x.embedding[:, 0 : mappingReduced.m_size[0]].contiguous()
+        # x_0 = x_0.view(num_edges, -1)
         x_0 = x.embedding.narrow(1, 0, self.mappingReduced.m_size[0])
         x_0 = x_0.reshape(num_edges, -1)
 
@@ -721,10 +701,10 @@ class SO2Block(torch.nn.Module):
         for m in range(1, max(self.mmax_list) + 1):
             # Get the m order coefficients
 
-            #x_m = x.embedding[
+            # x_m = x.embedding[
             #    :, offset : offset + 2 * mappingReduced.m_size[m]
-            #].contiguous()
-            #x_m = x_m.view(num_edges, 2, -1)
+            # ].contiguous()
+            # x_m = x_m.view(num_edges, 2, -1)
 
             x_m = x.embedding.narrow(1, offset, 2 * self.mappingReduced.m_size[m])
             x_m = x_m.reshape(num_edges, 2, -1)
@@ -781,9 +761,7 @@ class SO2Conv(torch.nn.Module):
             if self.mmax_list[i] >= m:
                 num_coefficients = self.lmax_list[i] - m + 1
 
-            num_channels = (
-                num_channels + num_coefficients * self.sphere_channels
-            )
+            num_channels = num_channels + num_coefficients * self.sphere_channels
 
         assert num_channels > 0
 
@@ -800,7 +778,6 @@ class SO2Conv(torch.nn.Module):
         self.fc2_i = Linear(self.hidden_channels, num_channels, bias=False)
         self.fc2_i.weight.data.mul_(1 / math.sqrt(2))
 
-
     def forward(self, x_m, x_edge):
         # Compute edge scalar features
         x_edge = self.act(self.fc1_dist(x_edge))
@@ -808,17 +785,17 @@ class SO2Conv(torch.nn.Module):
 
         # Perform the complex weight multiplication
         x_r = self.fc1_r(x_m)
-        x_r = x_r * x_edge.narrow(1, 0, 1)      #x_edge[:, 0:1, :]
+        x_r = x_r * x_edge.narrow(1, 0, 1)  # x_edge[:, 0:1, :]
         x_r = self.fc2_r(x_r)
 
         x_i = self.fc1_i(x_m)
-        x_i = x_i * x_edge.narrow(1, 1, 1)      #x_edge[:, 1:2, :]
+        x_i = x_i * x_edge.narrow(1, 1, 1)  # x_edge[:, 1:2, :]
         x_i = self.fc2_i(x_i)
 
-        x_m_r = x_r.narrow(1, 0, 1) - x_i.narrow(1, 1, 1) #x_r[:, 0] - x_i[:, 1]
-        x_m_i = x_r.narrow(1, 1, 1) + x_i.narrow(1, 0, 1) #x_r[:, 1] + x_i[:, 0]
+        x_m_r = x_r.narrow(1, 0, 1) - x_i.narrow(1, 1, 1)  # x_r[:, 0] - x_i[:, 1]
+        x_m_i = x_r.narrow(1, 1, 1) + x_i.narrow(1, 0, 1)  # x_r[:, 1] + x_i[:, 0]
 
-        #return torch.stack((x_m_r, x_m_i), dim=1).contiguous()
+        # return torch.stack((x_m_r, x_m_i), dim=1).contiguous()
         return torch.cat((x_m_r, x_m_i), dim=1)
 
 
@@ -851,12 +828,8 @@ class EdgeBlock(torch.nn.Module):
         self.fc1_dist = Linear(self.in_channels, self.edge_channels)
 
         # Embedding function of the atomic numbers
-        self.source_embedding = nn.Embedding(
-            self.max_num_elements, self.edge_channels
-        )
-        self.target_embedding = nn.Embedding(
-            self.max_num_elements, self.edge_channels
-        )
+        self.source_embedding = nn.Embedding(self.max_num_elements, self.edge_channels)
+        self.target_embedding = nn.Embedding(self.max_num_elements, self.edge_channels)
         nn.init.uniform_(self.source_embedding.weight.data, -0.001, 0.001)
         nn.init.uniform_(self.target_embedding.weight.data, -0.001, 0.001)
 
@@ -867,7 +840,6 @@ class EdgeBlock(torch.nn.Module):
         )
 
     def forward(self, edge_distance, source_element, target_element):
-
         # Compute distance embedding
         x_dist = self.distance_expansion(edge_distance)
         x_dist = self.fc1_dist(x_dist)

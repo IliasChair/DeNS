@@ -91,18 +91,18 @@ class DeNSLmdbDataset(Dataset[T_co]):
             # TODO: update "relaxations" and "md" so that the keys are not dependent on how data are generated
             txt_paths = sorted(self.path.glob("*.txt"))
             index = 0
-            #self.relax_indices = set()
-            #self.md_indices = set()
+            # self.relax_indices = set()
+            # self.md_indices = set()
             self.is_md_list = []
             for txt_path in txt_paths:
                 txt_file = open(txt_path)
                 lines = txt_file.read().splitlines()
                 for line in lines:
                     if "relaxations" in line:
-                        #self.relax_indices.add(index)
+                        # self.relax_indices.add(index)
                         self.is_md_list.append(False)
                     elif "md" in line:
-                        #self.md_indices.add(index)
+                        # self.md_indices.add(index)
                         self.is_md_list.append(True)
                     else:
                         self.is_md_list.append(False)
@@ -119,9 +119,7 @@ class DeNSLmdbDataset(Dataset[T_co]):
             else:
                 # Get the number of stores data from the number of entries
                 # in the LMDB
-                num_entries = assert_is_instance(
-                    self.env.stat()["entries"], int
-                )
+                num_entries = assert_is_instance(self.env.stat()["entries"], int)
 
             self._keys = list(range(num_entries))
             self.num_samples = num_entries
@@ -186,9 +184,9 @@ class DeNSLmdbDataset(Dataset[T_co]):
         data_object = self.transforms(data_object)
 
         # Add identifier to distinguish MD and Relaxation data.
-        #if idx in self.md_indices:
+        # if idx in self.md_indices:
         #    data_object.md = 1
-        #else:
+        # else:
         #    data_object.md = 0
         if idx >= len(self.is_md_list):
             data_object.md = 0

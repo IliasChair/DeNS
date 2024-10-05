@@ -18,11 +18,7 @@ class EnergyBlock(torch.nn.Module):
     """
 
     def __init__(
-        self,
-        in_channels,
-        hidden_channels,
-        num_sphere_samples,
-        activation="scaled_silu"
+        self, in_channels, hidden_channels, num_sphere_samples, activation="scaled_silu"
     ):
         super(EnergyBlock, self).__init__()
         self.in_channels = in_channels
@@ -43,17 +39,16 @@ class EnergyBlock(torch.nn.Module):
                 act(),
                 nn.Linear(self.hidden_channels, self.hidden_channels, bias=True),
                 act(),
-                nn.Linear(self.hidden_channels, 1, bias=True)
+                nn.Linear(self.hidden_channels, 1, bias=True),
             )
         elif activation in ["swiglu"]:
             self.mlp_pt = nn.Sequential(
                 SwiGLU(self.in_channels, self.hidden_channels, bias=True),
-                #SwiGLU(self.hidden_channels, self.hidden_channels, bias=True),
-                nn.Linear(self.hidden_channels, 1, bias=True)
+                # SwiGLU(self.hidden_channels, self.hidden_channels, bias=True),
+                nn.Linear(self.hidden_channels, 1, bias=True),
             )
         else:
             raise ValueError
-
 
     def forward(self, x_l0, x_pt):
         # `x_pt` are the values of the channels sampled at different points on the sphere
@@ -75,12 +70,7 @@ class EnergyBlockV2(torch.nn.Module):
         activation (str):           Name of non-linear activation function
     """
 
-    def __init__(
-        self,
-        in_channels,
-        hidden_channels,
-        activation="scaled_silu"
-    ):
+    def __init__(self, in_channels, hidden_channels, activation="scaled_silu"):
         super(EnergyBlockV2, self).__init__()
         self.in_channels = in_channels
         self.hidden_channels = hidden_channels
@@ -97,19 +87,18 @@ class EnergyBlockV2(torch.nn.Module):
             self.mlp = nn.Sequential(
                 nn.Linear(self.in_channels, self.hidden_channels, bias=True),
                 act(),
-                #nn.Linear(self.hidden_channels, self.hidden_channels, bias=True),
-                #act(),
-                nn.Linear(self.hidden_channels, 1, bias=True)
+                # nn.Linear(self.hidden_channels, self.hidden_channels, bias=True),
+                # act(),
+                nn.Linear(self.hidden_channels, 1, bias=True),
             )
         elif activation in ["swiglu"]:
             self.mlp = nn.Sequential(
                 SwiGLU(self.in_channels, self.hidden_channels, bias=True),
-                #SwiGLU(self.hidden_channels, self.hidden_channels, bias=True),
-                nn.Linear(self.hidden_channels, 1, bias=True)
+                # SwiGLU(self.hidden_channels, self.hidden_channels, bias=True),
+                nn.Linear(self.hidden_channels, 1, bias=True),
             )
         else:
             raise ValueError
-
 
     def forward(self, x):
         out = self.mlp(x)
@@ -128,11 +117,7 @@ class ForceBlock(torch.nn.Module):
     """
 
     def __init__(
-        self,
-        in_channels,
-        hidden_channels,
-        num_sphere_samples,
-        activation="scaled_silu"
+        self, in_channels, hidden_channels, num_sphere_samples, activation="scaled_silu"
     ):
         super(ForceBlock, self).__init__()
         self.in_channels = in_channels
@@ -151,13 +136,12 @@ class ForceBlock(torch.nn.Module):
             self.module = nn.Sequential(
                 nn.Linear(self.in_channels, self.hidden_channels),
                 act(),
-                #nn.Linear(self.hidden_channels, self.hidden_channels),
-                #act(),
-                nn.Linear(self.hidden_channels, 1, bias=False)
+                # nn.Linear(self.hidden_channels, self.hidden_channels),
+                # act(),
+                nn.Linear(self.hidden_channels, 1, bias=False),
             )
         else:
             raise ValueError
-
 
     def forward(self, x_pt, sphere_points):
         # `x_pt` are the values of the channels sampled at different points on the sphere

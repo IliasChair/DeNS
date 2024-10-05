@@ -6,7 +6,7 @@ import torch
 @torch.jit.script
 def gaussian(x, mean, std):
     pi = 3.14159
-    a = (2*pi) ** 0.5
+    a = (2 * pi) ** 0.5
     return torch.exp(-0.5 * (((x - mean) / std) ** 2)) / (a * std)
 
 
@@ -16,8 +16,8 @@ class GaussianRadialBasisLayer(torch.nn.Module):
         super().__init__()
         self.num_basis = num_basis
         self.cutoff = cutoff + 0.0
-        self.mean   = torch.nn.Parameter(torch.zeros(1, self.num_basis))
-        self.std    = torch.nn.Parameter(torch.zeros(1, self.num_basis))
+        self.mean = torch.nn.Parameter(torch.zeros(1, self.num_basis))
+        self.std = torch.nn.Parameter(torch.zeros(1, self.num_basis))
         self.weight = torch.nn.Parameter(torch.ones(1, 1))
         self.bias = torch.nn.Parameter(torch.zeros(1, 1))
 
@@ -30,7 +30,6 @@ class GaussianRadialBasisLayer(torch.nn.Module):
         torch.nn.init.constant_(self.weight, 1)
         torch.nn.init.constant_(self.bias, 0)
 
-
     def forward(self, dist, node_atom=None, edge_src=None, edge_dst=None):
         x = dist / self.cutoff
         x = x.unsqueeze(-1)
@@ -40,7 +39,6 @@ class GaussianRadialBasisLayer(torch.nn.Module):
         std = self.std.abs() + 1e-5
         x = gaussian(x, mean, std)
         return x
-
 
     def extra_repr(self):
         return f"mean_init_max={self.mean_init_max}, mean_init_min={self.mean_init_min}, std_init_max={self.std_init_max}, std_init_min={self.std_init_min}"

@@ -32,14 +32,14 @@ from ocpmodels.models.scn.smearing import (
 )
 
 from ocpmodels.models.escn.escn import (
-    eSCN, 
+    eSCN,
     LayerBlock,
     MessageBlock,
     SO2Block,
     SO2Conv,
     EdgeBlock,
     EnergyBlock,
-    ForceBlock
+    ForceBlock,
 )
 from ..equiformer_v2.so3 import SO3_LinearV2
 
@@ -57,10 +57,10 @@ class eSCN_DenoisingPos(eSCN):
     1.  We use the default architectural parameters for denoising positions.
         a.  We encode all degrees for forces.
         b.  We share the energy head for predicting denoising energy.
-    2.  Following that eSCN uses small initialization (multiplying with 0.001) for 
-        energy predictions and atom-edge embeddings, we use small initializations 
+    2.  Following that eSCN uses small initialization (multiplying with 0.001) for
+        energy predictions and atom-edge embeddings, we use small initializations
         for encoding forces.
-    
+
     Args:
         use_pbc (bool):         Use periodic boundary conditions
         regress_forces (bool):  Compute forces
@@ -79,7 +79,7 @@ class eSCN_DenoisingPos(eSCN):
         distance_function ("gaussian", "sigmoid", "linearsigmoid", "silu"):  Basis function used for distances
         basis_width_scalar (float):   Width of distance basis function
         distance_resolution (float):  Distance between distance basis functions in Angstroms
-        
+
         use_force_encoding (bool):    Whether to use force encoding when denoising positions
 
         show_timing_info (bool):      Show timing and memory info
@@ -111,9 +111,9 @@ class eSCN_DenoisingPos(eSCN):
         show_timing_info=True,
     ):
         super().__init__(
-            num_atoms,      # not used
+            num_atoms,  # not used
             bond_feat_dim,  # not used
-            num_targets,    # not used
+            num_targets,  # not used
             use_pbc,
             regress_forces,
             otf_graph,
@@ -138,9 +138,7 @@ class eSCN_DenoisingPos(eSCN):
         self.use_force_encoding = use_force_encoding
         self.irreps_sh = o3.Irreps.spherical_harmonics(lmax=max(self.lmax_list), p=1)
         self.force_embedding = SO3_LinearV2(
-            in_features=1, 
-            out_features=self.sphere_channels, 
-            lmax=max(self.lmax_list)
+            in_features=1, out_features=self.sphere_channels, lmax=max(self.lmax_list)
         )
         torch.nn.init.uniform_(self.force_embedding.weight, -0.001, 0.001)
 
@@ -148,7 +146,6 @@ class eSCN_DenoisingPos(eSCN):
             self.denoising_pos_block = ForceBlock(
                 self.sphere_channels_all, self.num_sphere_samples, self.act
             )
-
 
     @conditional_grad(torch.enable_grad())
     def forward(self, data):
@@ -174,16 +171,12 @@ class eSCN_DenoisingPos(eSCN):
         ###############################################################
 
         # Compute 3x3 rotation matrix per edge
-        edge_rot_mat = self._init_edge_rot_mat(
-            data, edge_index, edge_distance_vec
-        )
+        edge_rot_mat = self._init_edge_rot_mat(data, edge_index, edge_distance_vec)
 
         # Initialize the WignerD matrices and other values for spherical harmonic calculations
         self.SO3_edge_rot = nn.ModuleList()
         for i in range(self.num_resolutions):
-            self.SO3_edge_rot.append(
-                SO3_Rotation(edge_rot_mat, self.lmax_list[i])
-            )
+            self.SO3_edge_rot.append(SO3_Rotation(edge_rot_mat, self.lmax_list[i]))
 
         ###############################################################
         # Initialize node embeddings
@@ -203,41 +196,50 @@ class eSCN_DenoisingPos(eSCN):
         offset = 0
         # Initialize the l=0,m=0 coefficients for each resolution
         for i in range(self.num_resolutions):
-            x.embedding[:, offset_res, :] = self.sphere_embedding(
-                atomic_numbers
-            )[:, offset : offset + self.sphere_channels]
+            x.embedding[:, offset_res, :] = self.sphere_embedding(atomic_numbers)[
+                :, offset : offset + self.sphere_channels
+            ]
             offset = offset + self.sphere_channels
             offset_res = offset_res + int((self.lmax_list[i] + 1) ** 2)
 
         # This can be expensive to compute (not implemented efficiently), so only do it once and pass it along to each layer
-        mappingReduced = CoefficientMapping(
-            self.lmax_list, self.mmax_list, self.device
-        )
+        mappingReduced = CoefficientMapping(self.lmax_list, self.mmax_list, self.device)
 
         # Node-wise force encoding during denoising positions
-        if hasattr(data, 'denoising_pos_forward') and data.denoising_pos_forward and self.use_force_encoding:
-            assert hasattr(data, 'forces')
+        if (
+            hasattr(data, "denoising_pos_forward")
+            and data.denoising_pos_forward
+            and self.use_force_encoding
+        ):
+            assert hasattr(data, "forces")
             force_data = data.forces
             force_sh = o3.spherical_harmonics(
                 l=self.irreps_sh,
-                x=force_data, 
-                normalize=True, 
-                normalization='component')
+                x=force_data,
+                normalize=True,
+                normalization="component",
+            )
             force_sh = force_sh.view(num_atoms, (max(self.lmax_list) + 1) ** 2, 1)
-            if hasattr(data, 'noise_mask'):
+            if hasattr(data, "noise_mask"):
                 noise_mask_tensor = data.noise_mask.view(-1, 1, 1)
                 force_sh = force_sh * noise_mask_tensor
             force_norm = force_data.norm(dim=-1, keepdim=True)
             force_norm = force_norm.view(-1, 1, 1)
-            force_norm = force_norm / math.sqrt(3.0)    # since we use `component` normalization
-            force_embedding = SO3_Embedding(num_atoms, self.lmax_list, 1, self.device, self.dtype)
+            force_norm = force_norm / math.sqrt(
+                3.0
+            )  # since we use `component` normalization
+            force_embedding = SO3_Embedding(
+                num_atoms, self.lmax_list, 1, self.device, self.dtype
+            )
             force_embedding.embedding = force_sh * force_norm
         else:
             # normal S2EF
-            # we use zero tensors to remove force encoding 
+            # we use zero tensors to remove force encoding
             # we can create the zero tensors by just calling `SO3_Embedding()`
             #   https://github.com/Open-Catalyst-Project/ocp/blob/5a7738f9aa80b1a9a7e0ca15e33938b4d2557edd/ocpmodels/models/escn/so3.py#L130-L171
-            force_embedding = SO3_Embedding(num_atoms, self.lmax_list, 1, self.device, self.dtype)
+            force_embedding = SO3_Embedding(
+                num_atoms, self.lmax_list, 1, self.device, self.dtype
+            )
         force_embedding = self.force_embedding(force_embedding)
         x.embedding = x.embedding + force_embedding.embedding
 
@@ -300,8 +302,8 @@ class eSCN_DenoisingPos(eSCN):
         energy.index_add_(0, data.batch, node_energy.view(-1))
         # Scale energy to help balance numerical precision w.r.t. forces
         energy = energy * 0.001
-        
-        outputs = {'energy': energy}
+
+        outputs = {"energy": energy}
 
         ###############################################################
         # Force estimation
@@ -313,15 +315,17 @@ class eSCN_DenoisingPos(eSCN):
         self.counter = self.counter + 1
 
         if self.regress_forces:
-            if hasattr(data, 'denoising_pos_forward') and data.denoising_pos_forward:
-                if hasattr(data, 'noise_mask'):
+            if hasattr(data, "denoising_pos_forward") and data.denoising_pos_forward:
+                if hasattr(data, "noise_mask"):
                     noise_mask_tensor = data.noise_mask.view(-1, 1)
-                    forces = denoising_pos_vec * noise_mask_tensor + forces * (~noise_mask_tensor)
+                    forces = denoising_pos_vec * noise_mask_tensor + forces * (
+                        ~noise_mask_tensor
+                    )
                 else:
                     forces = denoising_pos_vec + 0 * forces
             else:
                 forces = 0 * denoising_pos_vec + forces
-            
-            outputs['forces'] = forces
-        
+
+            outputs["forces"] = forces
+
         return outputs

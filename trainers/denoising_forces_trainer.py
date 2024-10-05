@@ -5,7 +5,6 @@ This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
 
-
 import logging
 from dataclasses import dataclass
 from collections import defaultdict
@@ -39,9 +38,7 @@ class DenoisingPosParams:
     denoising_pos_coefficient: float = None
 
 
-def add_gaussian_noise_to_position(
-    batch, std, corrupt_ratio=None, all_atoms=False
-):
+def add_gaussian_noise_to_position(batch, std, corrupt_ratio=None, all_atoms=False):
     """
     1.  Update `pos` in `batch`.
     2.  Add `noise_vec` to `batch`, which will serve as the target for denoising positions.
@@ -62,15 +59,15 @@ def add_gaussian_noise_to_position(
         noise_mask = noise_mask < corrupt_ratio
         noise_vec[(~noise_mask)] *= 0
         batch.noise_mask = noise_mask
-    
+
     # Not add noise to structures from MD split
-    if hasattr(batch, 'md'):
+    if hasattr(batch, "md"):
         batch_index = batch.batch
         md_index = batch.md.bool()
         md_index = md_index[batch_index]
-        noise_mask = (~md_index)
+        noise_mask = ~md_index
         noise_vec[(~noise_mask)] *= 0
-        if hasattr(batch, 'noise_mask'):
+        if hasattr(batch, "noise_mask"):
             batch.noise_mask = batch.noise_mask * noise_mask
         else:
             batch.noise_mask = noise_mask
@@ -117,22 +114,22 @@ def add_gaussian_noise_schedule_to_position(
             device=batch.pos.device,
         )
         noise_mask = noise_mask < corrupt_ratio
-        #noise_vec[(~noise_mask)] *= 0
+        # noise_vec[(~noise_mask)] *= 0
         batch.noise_mask = noise_mask
 
     # Not add noise to structures from MD split
-    if hasattr(batch, 'md'):
+    if hasattr(batch, "md"):
         batch_index = batch.batch
         md_index = batch.md.bool()
         md_index = md_index[batch_index]
-        noise_mask = (~md_index)
-        #noise_vec[(~noise_mask)] *= 0
-        if hasattr(batch, 'noise_mask'):
+        noise_mask = ~md_index
+        # noise_vec[(~noise_mask)] *= 0
+        if hasattr(batch, "noise_mask"):
             batch.noise_mask = batch.noise_mask * noise_mask
         else:
             batch.noise_mask = noise_mask
 
-    if hasattr(batch, 'noise_mask'):
+    if hasattr(batch, "noise_mask"):
         noise_vec[(~batch.noise_mask)] *= 0
 
     # only add noise to free atoms
@@ -189,13 +186,9 @@ def denoising_pos_eval(
         if res["numel"] != 0:
             metrics = evaluator.update("denoising_force_mae", res, metrics)
         denoising_pos_index = torch.where(noise_mask == 1)
-        denoising_pos_prediction = {
-            "forces": prediction_tensor[denoising_pos_index]
-        }
+        denoising_pos_prediction = {"forces": prediction_tensor[denoising_pos_index]}
         denoising_pos_target = {"forces": target_tensor[denoising_pos_index]}
-        res = eval("mae")(
-            denoising_pos_prediction, denoising_pos_target, "forces"
-        )
+        res = eval("mae")(denoising_pos_prediction, denoising_pos_target, "forces")
         if res["numel"] != 0:
             metrics = evaluator.update("denoising_pos_mae", res, metrics)
     return metrics
@@ -228,7 +221,7 @@ class DenoisingForcesTrainer(EquiformerV2ForcesTrainer):
     3.  This should make models leverage more from training data and enable data augmentation for
         the S2EF task.
     4.  We should only modify the training part.
-    5.  For normalizing the outputs of noise prediction, if we use `fixed_noise_std = True`, we use 
+    5.  For normalizing the outputs of noise prediction, if we use `fixed_noise_std = True`, we use
         `std` for the normalization factor. Otherwise, we use `std_high` when `fixed_noise_std = False`.
 
     Args:
@@ -308,13 +301,14 @@ class DenoisingForcesTrainer(EquiformerV2ForcesTrainer):
         self.denoising_pos_params = DenoisingPosParams(
             **self.config["optim"]["denoising_pos_params"]
         )
-        self.denoising_pos_params.denoising_pos_coefficient = self.config[
-            "optim"
-        ]["denoising_pos_coefficient"]
+        self.denoising_pos_params.denoising_pos_coefficient = self.config["optim"][
+            "denoising_pos_coefficient"
+        ]
         self.normalizers["denoising_pos_target"] = Normalizer(
             mean=0.0,
             std=(
-                self.denoising_pos_params.std if self.denoising_pos_params.fixed_noise_std
+                self.denoising_pos_params.std
+                if self.denoising_pos_params.fixed_noise_std
                 else self.denoising_pos_params.std_high
             ),
             device=self.device,
@@ -323,19 +317,12 @@ class DenoisingForcesTrainer(EquiformerV2ForcesTrainer):
     def train(self, disable_eval_tqdm=False):
         ensure_fitted(self._unwrapped_model, warn=True)
 
-        eval_every = self.config["optim"].get(
-            "eval_every", len(self.train_loader)
-        )
-        checkpoint_every = self.config["optim"].get(
-            "checkpoint_every", eval_every
-        )
+        eval_every = self.config["optim"].get("eval_every", len(self.train_loader))
+        checkpoint_every = self.config["optim"].get("checkpoint_every", eval_every)
         primary_metric = self.evaluation_metrics.get(
             "primary_metric", self.evaluator.task_primary_metric[self.name]
         )
-        if (
-            not hasattr(self, "primary_metric")
-            or self.primary_metric != primary_metric
-        ):
+        if not hasattr(self, "primary_metric") or self.primary_metric != primary_metric:
             self.best_val_metric = 1e9 if "mae" in primary_metric else -1.0
         else:
             primary_metric = self.primary_metric
@@ -345,13 +332,9 @@ class DenoisingForcesTrainer(EquiformerV2ForcesTrainer):
         # to prevent inconsistencies due to different batch size in checkpoint.
         start_epoch = self.step // len(self.train_loader)
 
-        for epoch_int in range(
-            start_epoch, self.config["optim"]["max_epochs"]
-        ):
+        for epoch_int in range(start_epoch, self.config["optim"]["max_epochs"]):
             skip_steps = self.step % len(self.train_loader)
-            self.train_sampler.set_epoch_and_start_iteration(
-                epoch_int, skip_steps
-            )
+            self.train_sampler.set_epoch_and_start_iteration(epoch_int, skip_steps)
             train_loader_iter = iter(self.train_loader)
 
             self.metrics = {}
@@ -417,9 +400,7 @@ class DenoisingForcesTrainer(EquiformerV2ForcesTrainer):
                     or i == 0
                     or i == (len(self.train_loader) - 1)
                 ) and distutils.is_master():
-                    log_str = [
-                        "{}: {:.2e}".format(k, v) for k, v in log_dict.items()
-                    ]
+                    log_str = ["{}: {:.2e}".format(k, v) for k, v in log_dict.items()]
                     logging.info(", ".join(log_str))
                     self.metrics = {}
 
@@ -430,18 +411,11 @@ class DenoisingForcesTrainer(EquiformerV2ForcesTrainer):
                         split="train",
                     )
 
-                if (
-                    checkpoint_every != -1
-                    and self.step % checkpoint_every == 0
-                ):
-                    self.save(
-                        checkpoint_file="checkpoint.pt", training_state=True
-                    )
+                if checkpoint_every != -1 and self.step % checkpoint_every == 0:
+                    self.save(checkpoint_file="checkpoint.pt", training_state=True)
 
                 # Evaluate on val set every `eval_every` iterations.
-                if self.step % eval_every == 0 or i == (
-                    len(self.train_loader) - 1
-                ):
+                if self.step % eval_every == 0 or i == (len(self.train_loader) - 1):
                     if self.val_loader is not None:
                         if i == (len(self.train_loader) - 1):
                             self.save(
@@ -494,9 +468,7 @@ class DenoisingForcesTrainer(EquiformerV2ForcesTrainer):
         for loss_fn in self.loss_fns:
             target_name, loss_info = loss_fn
 
-            if target_name == "forces" and batch.get(
-                "denoising_pos_forward", False
-            ):
+            if target_name == "forces" and batch.get("denoising_pos_forward", False):
                 denoising_pos_target = batch.noise_vec
                 if self.normalizers.get("denoising_pos_target", False):
                     denoising_pos_target = self.normalizers[
@@ -673,14 +645,14 @@ class DenoisingForcesTrainer(EquiformerV2ForcesTrainer):
                             "denoising_pos_target"
                         ].denorm(out["forces"][denoising_pos_index])
                     else:
-                        out["forces"] = self.normalizers[
-                            "denoising_pos_target"
-                        ].denorm(out["forces"])
+                        out["forces"] = self.normalizers["denoising_pos_target"].denorm(
+                            out["forces"]
+                        )
 
                 if hasattr(batch, "noise_mask"):
-                    out["forces"][s2ef_index] = self.normalizers[
-                        "forces"
-                    ].denorm(out["forces"][s2ef_index])
+                    out["forces"][s2ef_index] = self.normalizers["forces"].denorm(
+                        out["forces"][s2ef_index]
+                    )
 
                 if (
                     self.output_targets[target_name]["level"] == "atom"
@@ -735,7 +707,6 @@ class DenoisingForcesTrainer(EquiformerV2ForcesTrainer):
 
         return metrics
 
-
     @torch.no_grad()
     def predict(
         self,
@@ -745,9 +716,7 @@ class DenoisingForcesTrainer(EquiformerV2ForcesTrainer):
         disable_tqdm: bool = False,
     ):
         if self.is_debug and per_image:
-            raise FileNotFoundError(
-                "Predictions require debug mode to be turned off."
-            )
+            raise FileNotFoundError("Predictions require debug mode to be turned off.")
 
         ensure_fitted(self._unwrapped_model, warn=True)
 
@@ -801,27 +770,22 @@ class DenoisingForcesTrainer(EquiformerV2ForcesTrainer):
                             "prediction_dtype", "float16"
                         )
                         == "float32"
-                        or self.config["task"].get(
-                            "prediction_dtype", "float16"
-                        )
+                        or self.config["task"].get("prediction_dtype", "float16")
                         == "float32"
-                        or self.config["task"].get("dataset", "lmdb")
-                        == "oc22_lmdb"
+                        or self.config["task"].get("dataset", "lmdb") == "oc22_lmdb"
                     ):
                         dtype = torch.float32
                     else:
                         dtype = torch.float16
 
-                    #pred = pred.cpu().detach().to(dtype)
+                    # pred = pred.cpu().detach().to(dtype)
                     pred = pred.detach().cpu().to(dtype)
-                    
+
                     ### Split predictions into per-image predictions
                     if self.config["outputs"][target_key]["level"] == "atom":
                         batch_natoms = batch.natoms
                         batch_fixed = batch.fixed
-                        per_image_pred = torch.split(
-                            pred, batch_natoms.tolist()
-                        )
+                        per_image_pred = torch.split(pred, batch_natoms.tolist())
 
                         ### Save out only free atom, EvalAI does not need fixed atoms
                         _per_image_fixed = torch.split(
@@ -829,15 +793,10 @@ class DenoisingForcesTrainer(EquiformerV2ForcesTrainer):
                         )
                         _per_image_free_preds = [
                             _pred[(fixed == 0).tolist()].numpy()
-                            for _pred, fixed in zip(
-                                per_image_pred, _per_image_fixed
-                            )
+                            for _pred, fixed in zip(per_image_pred, _per_image_fixed)
                         ]
                         _chunk_idx = np.array(
-                            [
-                                free_pred.shape[0]
-                                for free_pred in _per_image_free_preds
-                            ]
+                            [free_pred.shape[0] for free_pred in _per_image_free_preds]
                         )
                         per_image_pred = _per_image_free_preds
                     ### Assumes system level properties are of the same dimension
@@ -851,9 +810,7 @@ class DenoisingForcesTrainer(EquiformerV2ForcesTrainer):
                         if target_key == "forces":
                             predictions["chunk_idx"].extend(_chunk_idx)
                         else:
-                            predictions[f"{target_key}_chunk_idx"].extend(
-                                _chunk_idx
-                            )
+                            predictions[f"{target_key}_chunk_idx"].extend(_chunk_idx)
                 else:
                     predictions[f"{target_key}"] = pred.detach()
 
@@ -862,9 +819,7 @@ class DenoisingForcesTrainer(EquiformerV2ForcesTrainer):
 
             ### Get unique system identifiers
             sids = (
-                batch.sid.tolist()
-                if isinstance(batch.sid, torch.Tensor)
-                else batch.sid
+                batch.sid.tolist() if isinstance(batch.sid, torch.Tensor) else batch.sid
             )
             ## Support naming structure for OC20 S2EF
             if "fid" in batch:
@@ -880,10 +835,10 @@ class DenoisingForcesTrainer(EquiformerV2ForcesTrainer):
             predictions["ids"].extend(systemids)
 
         # for key in predictions:
-            # if isinstance(predictions[key][0], np.ndarray):
-                # predictions[key] = np.concatenate(predictions[key], axis=0)
-            # else:
-                # predictions[key] = np.array(predictions[key])
+        # if isinstance(predictions[key][0], np.ndarray):
+        # predictions[key] = np.concatenate(predictions[key], axis=0)
+        # else:
+        # predictions[key] = np.array(predictions[key])
         self.save_results(predictions, results_file)
 
         if self.ema:
