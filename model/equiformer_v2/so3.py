@@ -1,5 +1,5 @@
 """
-Copyright (c) Facebook, Inc. and its affiliates.
+Copyright (c) Meta, Inc. and its affiliates.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
@@ -30,7 +30,7 @@ from .wigner import wigner_D
 
 class CoefficientMappingModule(torch.nn.Module):
     """
-    Helper module for coefficients used to reshape l <--> m and to get coefficients of specific degree or order
+    Helper module for coefficients used to reshape lval <--> m and to get coefficients of specific degree or order
 
     Args:
         lmax_list (list:int):   List of maximum degree of the spherical harmonics
@@ -39,8 +39,8 @@ class CoefficientMappingModule(torch.nn.Module):
 
     def __init__(
         self,
-        lmax_list,
-        mmax_list,
+        lmax_list: list[int],
+        mmax_list: list[int],
     ):
         super().__init__()
 
@@ -51,7 +51,7 @@ class CoefficientMappingModule(torch.nn.Module):
         # Temporarily use `cpu` as device and this will be overwritten.
         self.device = "cpu"
 
-        # Compute the degree (l) and order (m) for each entry of the embedding
+        # Compute the degree (lval) and order (m) for each entry of the embedding
         l_harmonic = torch.tensor([], device=self.device).long()
         m_harmonic = torch.tensor([], device=self.device).long()
         m_complex = torch.tensor([], device=self.device).long()
@@ -60,12 +60,12 @@ class CoefficientMappingModule(torch.nn.Module):
 
         offset = 0
         for i in range(self.num_resolutions):
-            for l in range(self.lmax_list[i] + 1):
-                mmax = min(self.mmax_list[i], l)
+            for lval in range(self.lmax_list[i] + 1):
+                mmax = min(self.mmax_list[i], lval)
                 m = torch.arange(-mmax, mmax + 1, device=self.device).long()
                 m_complex = torch.cat([m_complex, m], dim=0)
                 m_harmonic = torch.cat([m_harmonic, torch.abs(m).long()], dim=0)
-                l_harmonic = torch.cat([l_harmonic, m.fill_(l).long()], dim=0)
+                l_harmonic = torch.cat([l_harmonic, m.fill_(lval).long()], dim=0)
             res_size[i] = len(l_harmonic) - offset
             offset = len(l_harmonic)
 
@@ -106,7 +106,7 @@ class CoefficientMappingModule(torch.nn.Module):
         self.rotate_inv_rescale_cache = None
 
     # Return mask containing coefficients of order m (real and imaginary parts)
-    def complex_idx(self, m, lmax, m_complex, l_harmonic):
+    def complex_idx(self, m: int, lmax: int, m_complex, l_harmonic):
         """
         Add `m_complex` and `l_harmonic` to the input arguments
         since we cannot use `self.m_complex`.
@@ -127,12 +127,16 @@ class CoefficientMappingModule(torch.nn.Module):
 
         return mask_idx_r, mask_idx_i
 
-    # Return mask containing coefficients less than or equal to degree (l) and order (m)
-    def coefficient_idx(self, lmax, mmax):
-        if (self.lmax_cache is not None) and (self.mmax_cache is not None):
-            if (self.lmax_cache == lmax) and (self.mmax_cache == mmax):
-                if self.mask_indices_cache is not None:
-                    return self.mask_indices_cache
+    # Return mask containing coefficients less than or equal to degree (lval) and order (m)
+    def coefficient_idx(self, lmax: int, mmax: int):
+        if (
+            (self.lmax_cache is not None)
+            and (self.mmax_cache is not None)
+            and (self.lmax_cache == lmax)
+            and (self.mmax_cache == mmax)
+            and self.mask_indices_cache is not None
+        ):
+            return self.mask_indices_cache
 
         mask = torch.bitwise_and(self.l_harmonic.le(lmax), self.m_harmonic.le(mmax))
         self.device = mask.device
@@ -144,11 +148,15 @@ class CoefficientMappingModule(torch.nn.Module):
 
     # Return the re-scaling for rotating back to original frame
     # this is required since we only use a subset of m components for SO(2) convolution
-    def get_rotate_inv_rescale(self, lmax, mmax):
-        if (self.lmax_cache is not None) and (self.mmax_cache is not None):
-            if (self.lmax_cache == lmax) and (self.mmax_cache == mmax):
-                if self.rotate_inv_rescale_cache is not None:
-                    return self.rotate_inv_rescale_cache
+    def get_rotate_inv_rescale(self, lmax: int, mmax: int):
+        if (
+            (self.lmax_cache is not None)
+            and (self.mmax_cache is not None)
+            and (self.lmax_cache == lmax)
+            and (self.mmax_cache == mmax)
+            and self.rotate_inv_rescale_cache is not None
+        ):
+            return self.rotate_inv_rescale_cache
 
         if self.mask_indices_cache is None:
             self.coefficient_idx(lmax, mmax)
@@ -156,20 +164,22 @@ class CoefficientMappingModule(torch.nn.Module):
         rotate_inv_rescale = torch.ones(
             (1, (lmax + 1) ** 2, (lmax + 1) ** 2), device=self.device
         )
-        for l in range(lmax + 1):
-            if l <= mmax:
+        for lval in range(lmax + 1):
+            if lval <= mmax:
                 continue
-            start_idx = l**2
-            length = 2 * l + 1
+            start_idx = lval**2
+            length = 2 * lval + 1
             rescale_factor = math.sqrt(length / (2 * mmax + 1))
             rotate_inv_rescale[
-                :, start_idx : (start_idx + length), start_idx : (start_idx + length)
+                :,
+                start_idx : (start_idx + length),
+                start_idx : (start_idx + length),
             ] = rescale_factor
         rotate_inv_rescale = rotate_inv_rescale[:, :, self.mask_indices_cache]
         self.rotate_inv_rescale_cache = rotate_inv_rescale
         return self.rotate_inv_rescale_cache
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{self.__class__.__name__}(lmax_list={self.lmax_list}, mmax_list={self.mmax_list})"
 
 
@@ -187,11 +197,11 @@ class SO3_Embedding:
 
     def __init__(
         self,
-        length,
-        lmax_list,
-        num_channels,
-        device,
-        dtype,
+        length: int,
+        lmax_list: list[int],
+        num_channels: int,
+        device: torch.device,
+        dtype: torch.dtype,
     ):
         super().__init__()
         self.num_channels = num_channels
@@ -215,7 +225,7 @@ class SO3_Embedding:
         self.set_lmax_mmax(lmax_list, lmax_list.copy())
 
     # Clone an embedding of irreps
-    def clone(self):
+    def clone(self) -> SO3_Embedding:
         clone = SO3_Embedding(
             0,
             self.lmax_list.copy(),
@@ -227,22 +237,22 @@ class SO3_Embedding:
         return clone
 
     # Initialize an embedding of irreps
-    def set_embedding(self, embedding):
+    def set_embedding(self, embedding) -> None:
         self.length = len(embedding)
         self.embedding = embedding
 
     # Set the maximum order to be the maximum degree
-    def set_lmax_mmax(self, lmax_list, mmax_list):
+    def set_lmax_mmax(self, lmax_list: list[int], mmax_list: list[int]) -> None:
         self.lmax_list = lmax_list
         self.mmax_list = mmax_list
 
     # Expand the node embeddings to the number of edges
-    def _expand_edge(self, edge_index):
+    def _expand_edge(self, edge_index: torch.Tensor) -> None:
         embedding = self.embedding[edge_index]
         self.set_embedding(embedding)
 
     # Initialize an embedding of irreps of a neighborhood
-    def expand_edge(self, edge_index):
+    def expand_edge(self, edge_index: torch.Tensor):
         x_expand = SO3_Embedding(
             0,
             self.lmax_list.copy(),
@@ -254,7 +264,7 @@ class SO3_Embedding:
         return x_expand
 
     # Compute the sum of the embeddings of the neighborhood
-    def _reduce_edge(self, edge_index, num_nodes):
+    def _reduce_edge(self, edge_index: torch.Tensor, num_nodes: int):
         new_embedding = torch.zeros(
             num_nodes,
             self.num_coefficients,
@@ -265,16 +275,16 @@ class SO3_Embedding:
         new_embedding.index_add_(0, edge_index, self.embedding)
         self.set_embedding(new_embedding)
 
-    # Reshape the embedding l -> m
+    # Reshape the embedding lval -> m
     def _m_primary(self, mapping):
         self.embedding = torch.einsum("nac, ba -> nbc", self.embedding, mapping.to_m)
 
-    # Reshape the embedding m -> l
+    # Reshape the embedding m -> lval
     def _l_primary(self, mapping):
         self.embedding = torch.einsum("nac, ab -> nbc", self.embedding, mapping.to_m)
 
     # Rotate the embedding
-    def _rotate(self, SO3_rotation, lmax_list, mmax_list):
+    def _rotate(self, SO3_rotation, lmax_list: list[int], mmax_list: list[int]):
         if self.num_resolutions == 1:
             embedding_rotate = SO3_rotation[0].rotate(
                 self.embedding, lmax_list[0], mmax_list[0]
@@ -374,17 +384,20 @@ class SO3_Embedding:
                     :, offset : offset + num_coefficients
                 ].contiguous()
             to_grid_mat = to_grid_mat_lmax[
-                :, :, grid_mapping.coefficient_idx(self.lmax_list[i], self.lmax_list[i])
+                :,
+                :,
+                grid_mapping.coefficient_idx(self.lmax_list[i], self.lmax_list[i]),
             ]
             x_grid = torch.cat(
-                [x_grid, torch.einsum("bai, zic -> zbac", to_grid_mat, x_res)], dim=3
+                [x_grid, torch.einsum("bai, zic -> zbac", to_grid_mat, x_res)],
+                dim=3,
             )
             offset = offset + num_coefficients
 
         return x_grid
 
     # Compute irreps from grid representation
-    def _from_grid(self, x_grid, SO3_grid, lmax=-1):
+    def _from_grid(self, x_grid, SO3_grid, lmax: int = -1):
         if lmax == -1:
             lmax = max(self.lmax_list)
 
@@ -395,13 +408,18 @@ class SO3_Embedding:
         offset_channel = 0
         for i in range(self.num_resolutions):
             from_grid_mat = from_grid_mat_lmax[
-                :, :, grid_mapping.coefficient_idx(self.lmax_list[i], self.lmax_list[i])
+                :,
+                :,
+                grid_mapping.coefficient_idx(self.lmax_list[i], self.lmax_list[i]),
             ]
             if self.num_resolutions == 1:
                 temp = x_grid
             else:
                 temp = x_grid[
-                    :, :, :, offset_channel : offset_channel + self.num_channels
+                    :,
+                    :,
+                    :,
+                    offset_channel : offset_channel + self.num_channels,
                 ]
             x_res = torch.einsum("bai, zbac -> zic", from_grid_mat, temp)
             num_coefficients = int((self.lmax_list[i] + 1) ** 2)
@@ -425,7 +443,7 @@ class SO3_Rotation(torch.nn.Module):
 
     def __init__(
         self,
-        lmax,
+        lmax: int,
     ):
         super().__init__()
         self.lmax = lmax
@@ -433,20 +451,19 @@ class SO3_Rotation(torch.nn.Module):
 
     def set_wigner(self, rot_mat3x3):
         self.device, self.dtype = rot_mat3x3.device, rot_mat3x3.dtype
-        length = len(rot_mat3x3)
         self.wigner = self.RotationToWignerDMatrix(rot_mat3x3, 0, self.lmax)
         self.wigner_inv = torch.transpose(self.wigner, 1, 2).contiguous()
-        self.wigner = self.wigner  # .detach()
-        self.wigner_inv = self.wigner_inv  # .detach()
+        self.wigner = self.wigner.detach()
+        self.wigner_inv = self.wigner_inv.detach()
 
     # Rotate the embedding
-    def rotate(self, embedding, out_lmax, out_mmax):
+    def rotate(self, embedding, out_lmax: int, out_mmax: int):
         out_mask = self.mapping.coefficient_idx(out_lmax, out_mmax)
         wigner = self.wigner[:, out_mask, :]
         return torch.bmm(wigner, embedding)
 
     # Rotate the embedding by the inverse of the rotation matrix
-    def rotate_inv(self, embedding, in_lmax, in_mmax):
+    def rotate_inv(self, embedding, in_lmax: int, in_mmax: int):
         in_mask = self.mapping.coefficient_idx(in_lmax, in_mmax)
         wigner_inv = self.wigner_inv[:, :, in_mask]
         wigner_inv_rescale = self.mapping.get_rotate_inv_rescale(in_lmax, in_mmax)
@@ -454,7 +471,9 @@ class SO3_Rotation(torch.nn.Module):
         return torch.bmm(wigner_inv, embedding)
 
     # Compute Wigner matrices from rotation matrix
-    def RotationToWignerDMatrix(self, edge_rot_mat, start_lmax, end_lmax):
+    def RotationToWignerDMatrix(
+        self, edge_rot_mat, start_lmax: int, end_lmax: int
+    ) -> torch.Tensor:
         x = edge_rot_mat @ edge_rot_mat.new_tensor([0.0, 1.0, 0.0])
         alpha, beta = o3.xyz_to_angles(x)
         R = (
@@ -472,7 +491,7 @@ class SO3_Rotation(torch.nn.Module):
             wigner[:, start:end, start:end] = block
             start = end
 
-        return wigner  # .detach()
+        return wigner.detach()
 
 
 class SO3_Grid(torch.nn.Module):
@@ -486,10 +505,10 @@ class SO3_Grid(torch.nn.Module):
 
     def __init__(
         self,
-        lmax,
-        mmax,
-        normalization="integral",
-        resolution=None,
+        lmax: int,
+        mmax: int,
+        normalization: str = "integral",
+        resolution: int | None = None,
     ):
         super().__init__()
         self.lmax = lmax
@@ -516,11 +535,11 @@ class SO3_Grid(torch.nn.Module):
         to_grid_mat = torch.einsum("mbi, am -> bai", to_grid.shb, to_grid.sha).detach()
         # rescale based on mmax
         if lmax != mmax:
-            for l in range(lmax + 1):
-                if l <= mmax:
+            for lval in range(lmax + 1):
+                if lval <= mmax:
                     continue
-                start_idx = l**2
-                length = 2 * l + 1
+                start_idx = lval**2
+                length = 2 * lval + 1
                 rescale_factor = math.sqrt(length / (2 * mmax + 1))
                 to_grid_mat[:, :, start_idx : (start_idx + length)] = (
                     to_grid_mat[:, :, start_idx : (start_idx + length)] * rescale_factor
@@ -540,11 +559,11 @@ class SO3_Grid(torch.nn.Module):
         ).detach()
         # rescale based on mmax
         if lmax != mmax:
-            for l in range(lmax + 1):
-                if l <= mmax:
+            for lval in range(lmax + 1):
+                if lval <= mmax:
                     continue
-                start_idx = l**2
-                length = 2 * l + 1
+                start_idx = lval**2
+                length = 2 * lval + 1
                 rescale_factor = math.sqrt(length / (2 * mmax + 1))
                 from_grid_mat[:, :, start_idx : (start_idx + length)] = (
                     from_grid_mat[:, :, start_idx : (start_idx + length)]
@@ -567,42 +586,42 @@ class SO3_Grid(torch.nn.Module):
         return self.from_grid_mat
 
     # Compute grid from irreps representation
-    def to_grid(self, embedding, lmax, mmax):
+    def to_grid(self, embedding, lmax: int, mmax: int):
         to_grid_mat = self.to_grid_mat[:, :, self.mapping.coefficient_idx(lmax, mmax)]
-        grid = torch.einsum("bai, zic -> zbac", to_grid_mat, embedding)
-        return grid
+        return torch.einsum("bai, zic -> zbac", to_grid_mat, embedding)
 
     # Compute irreps from grid representation
-    def from_grid(self, grid, lmax, mmax):
+    def from_grid(self, grid, lmax: int, mmax: int):
         from_grid_mat = self.from_grid_mat[
             :, :, self.mapping.coefficient_idx(lmax, mmax)
         ]
-        embedding = torch.einsum("bai, zbac -> zic", from_grid_mat, grid)
-        return embedding
+        return torch.einsum("bai, zbac -> zic", from_grid_mat, grid)
 
 
 class SO3_Linear(torch.nn.Module):
-    def __init__(self, in_features, out_features, lmax, bias=True):
+    def __init__(
+        self, in_features: int, out_features: int, lmax: int, bias: bool = True
+    ) -> None:
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
         self.lmax = lmax
         self.linear_list = torch.nn.ModuleList()
-        for l in range(lmax + 1):
-            if l == 0:
+        for lval in range(lmax + 1):
+            if lval == 0:
                 self.linear_list.append(Linear(in_features, out_features, bias=bias))
             else:
                 self.linear_list.append(Linear(in_features, out_features, bias=False))
 
     def forward(self, input_embedding, output_scale=None):
         out = []
-        for l in range(self.lmax + 1):
-            start_idx = l**2
-            length = 2 * l + 1
+        for lval in range(self.lmax + 1):
+            start_idx = lval**2
+            length = 2 * lval + 1
             features = input_embedding.embedding.narrow(1, start_idx, length)
-            features = self.linear_list[l](features)
+            features = self.linear_list[lval](features)
             if output_scale is not None:
-                scale = output_scale.narrow(1, l, 1)
+                scale = output_scale.narrow(1, lval, 1)
                 features = features * scale
             out.append(features)
         out = torch.cat(out, dim=1)
@@ -621,12 +640,14 @@ class SO3_Linear(torch.nn.Module):
 
         return out_embedding
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{self.__class__.__name__}(in_features={self.in_features}, out_features={self.out_features}, lmax={self.lmax})"
 
 
 class SO3_LinearV2(torch.nn.Module):
-    def __init__(self, in_features, out_features, lmax, bias=True):
+    def __init__(
+        self, in_features: int, out_features: int, lmax: int, bias: bool = True
+    ) -> None:
         """
         1. Use `torch.einsum` to prevent slicing and concatenation
         2. Need to specify some behaviors in `no_weight_decay` and weight initialization.
@@ -644,10 +665,10 @@ class SO3_LinearV2(torch.nn.Module):
         self.bias = torch.nn.Parameter(torch.zeros(out_features))
 
         expand_index = torch.zeros([(lmax + 1) ** 2]).long()
-        for l in range(lmax + 1):
-            start_idx = l**2
-            length = 2 * l + 1
-            expand_index[start_idx : (start_idx + length)] = l
+        for lval in range(lmax + 1):
+            start_idx = lval**2
+            length = 2 * lval + 1
+            expand_index[start_idx : (start_idx + length)] = lval
         self.register_buffer("expand_index", expand_index)
 
     def forward(self, input_embedding):
@@ -674,5 +695,5 @@ class SO3_LinearV2(torch.nn.Module):
 
         return out_embedding
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{self.__class__.__name__}(in_features={self.in_features}, out_features={self.out_features}, lmax={self.lmax})"
