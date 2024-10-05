@@ -18,11 +18,11 @@ from torch.utils.data import Dataset
 from torch_geometric.data import Batch
 from torch_geometric.data.data import BaseData
 
-from ocpmodels.common.registry import registry
-from ocpmodels.common.typing import assert_is_instance
-from ocpmodels.common.utils import pyg2_data_transform
-from ocpmodels.datasets.target_metadata_guesser import guess_property_metadata
-from ocpmodels.modules.transforms import DataTransforms
+from fairchem.core.common.registry import registry
+from fairchem.core.common.typing import assert_is_instance
+from fairchem.core.common.utils import pyg2_data_transform
+from fairchem.core.datasets.target_metadata_guesser import guess_property_metadata
+from fairchem.core.modules.transforms import DataTransforms
 
 T_co = TypeVar("T_co", covariant=True)
 
@@ -40,10 +40,10 @@ class DeNSLmdbDataset(Dataset[T_co]):
     from 0 through the length of the LMDB. For historical reasons any key named
     "length" is ignored since that was used to infer length of many lmdbs in the same
     folder, but lmdb lengths are now calculated directly from the number of keys.
-    
+
     Add `md` to differentiate structures from All and MD splits when training on'
-    OC20 S2EF-All+MD. 
-    
+    OC20 S2EF-All+MD.
+
     Args:
             config (dict): Dataset configuration
             transform (callable, optional): Data transform function.
