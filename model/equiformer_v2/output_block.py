@@ -1,12 +1,9 @@
+from __future__ import annotations
+
 import torch
 import torch.nn as nn
 
-from torch.nn import Linear
-from .activation import (
-    ScaledSiLU,
-    ScaledSwiGLU,
-    SwiGLU
-)
+from .activation import ScaledSiLU, SwiGLU
 
 
 class EnergyBlock(torch.nn.Module):
@@ -25,7 +22,7 @@ class EnergyBlock(torch.nn.Module):
         in_channels,
         hidden_channels,
         num_sphere_samples,
-        activation='scaled_silu'
+        activation="scaled_silu"
     ):
         super(EnergyBlock, self).__init__()
         self.in_channels = in_channels
@@ -34,10 +31,10 @@ class EnergyBlock(torch.nn.Module):
         self.activation = activation
 
         # same as `S2ActivationFeedForwardNetwork`
-        if activation in ['scaled_silu', 'silu']:
-            if activation == 'scaled_silu':
+        if activation in ["scaled_silu", "silu"]:
+            if activation == "scaled_silu":
                 act = ScaledSiLU
-            elif activation == 'silu':
+            elif activation == "silu":
                 act = nn.SiLU
             else:
                 raise ValueError
@@ -48,7 +45,7 @@ class EnergyBlock(torch.nn.Module):
                 act(),
                 nn.Linear(self.hidden_channels, 1, bias=True)
             )
-        elif activation in ['swiglu']:
+        elif activation in ["swiglu"]:
             self.mlp_pt = nn.Sequential(
                 SwiGLU(self.in_channels, self.hidden_channels, bias=True),
                 #SwiGLU(self.hidden_channels, self.hidden_channels, bias=True),
@@ -82,7 +79,7 @@ class EnergyBlockV2(torch.nn.Module):
         self,
         in_channels,
         hidden_channels,
-        activation='scaled_silu'
+        activation="scaled_silu"
     ):
         super(EnergyBlockV2, self).__init__()
         self.in_channels = in_channels
@@ -90,10 +87,10 @@ class EnergyBlockV2(torch.nn.Module):
         self.activation = activation
 
         # same as `S2ActivationFeedForwardNetwork`
-        if activation in ['scaled_silu', 'silu']:
-            if activation == 'scaled_silu':
+        if activation in ["scaled_silu", "silu"]:
+            if activation == "scaled_silu":
                 act = ScaledSiLU
-            elif activation == 'silu':
+            elif activation == "silu":
                 act = nn.SiLU
             else:
                 raise ValueError
@@ -104,7 +101,7 @@ class EnergyBlockV2(torch.nn.Module):
                 #act(),
                 nn.Linear(self.hidden_channels, 1, bias=True)
             )
-        elif activation in ['swiglu']:
+        elif activation in ["swiglu"]:
             self.mlp = nn.Sequential(
                 SwiGLU(self.in_channels, self.hidden_channels, bias=True),
                 #SwiGLU(self.hidden_channels, self.hidden_channels, bias=True),
@@ -135,7 +132,7 @@ class ForceBlock(torch.nn.Module):
         in_channels,
         hidden_channels,
         num_sphere_samples,
-        activation='scaled_silu'
+        activation="scaled_silu"
     ):
         super(ForceBlock, self).__init__()
         self.in_channels = in_channels
@@ -144,10 +141,10 @@ class ForceBlock(torch.nn.Module):
         self.activation = activation
 
         # same as `S2ActivationFeedForwardNetwork`
-        if activation in ['scaled_silu', 'silu']:
-            if activation == 'scaled_silu':
+        if activation in ["scaled_silu", "silu"]:
+            if activation == "scaled_silu":
                 act = ScaledSiLU
-            elif activation == 'silu':
+            elif activation == "silu":
                 act = nn.SiLU
             else:
                 raise ValueError

@@ -4,15 +4,13 @@ Copyright (c) Meta, Inc. and its affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
+from __future__ import annotations
 
-import logging
-import time
 import math
-import numpy as np
+import time
+
 import torch
 import torch.nn as nn
-from pyexpat.model import XML_CQUANT_OPT
-
 from ocpmodels.common.registry import registry
 from ocpmodels.common.utils import conditional_grad
 from ocpmodels.models.base import BaseModel
@@ -36,7 +34,6 @@ from .so3 import (
     SO3_Grid,
     SO3_Rotation,
 )
-
 
 # Statistics of IS2RE 100K
 _AVG_NUM_NODES = 77.81317
@@ -127,7 +124,7 @@ class eSCNEfficient(BaseModel):
         self.sphere_channels_all = self.num_resolutions * self.sphere_channels
         self.basis_width_scalar = basis_width_scalar
         self.distance_function = distance_function
-        self.device = 'cpu' #torch.cuda.current_device()
+        self.device = "cpu" #torch.cuda.current_device()
 
         # variables used for display purposes
         self.counter = 0
@@ -184,7 +181,7 @@ class eSCNEfficient(BaseModel):
         self.mappingReduced = CoefficientMappingModule(self.lmax_list, self.mmax_list) #, self.device)
 
         # Initialize the transformations between spherical and grid representations
-        self.SO3_grid = ModuleListInfo('({}, {})'.format(max(self.lmax_list), max(self.lmax_list)))
+        self.SO3_grid = ModuleListInfo(f"({max(self.lmax_list)}, {max(self.lmax_list)})")
         for l in range(max(self.lmax_list) + 1):
             SO3_m_grid = nn.ModuleList()
             for m in range(max(self.lmax_list) + 1):
@@ -223,7 +220,7 @@ class eSCNEfficient(BaseModel):
         sphere_points = CalcSpherePoints(
             self.num_sphere_samples, self.device
         ).detach()
-        self.register_buffer('sphere_points', sphere_points)
+        self.register_buffer("sphere_points", sphere_points)
 
         # For each spherical point, compute the spherical harmonic coefficient weights
         sphharm_weights = []
@@ -236,7 +233,7 @@ class eSCNEfficient(BaseModel):
                 ).detach()
             )
         sphharm_weights = torch.stack(sphharm_weights, dim=0)
-        self.register_buffer('sphharm_weights', sphharm_weights)
+        self.register_buffer("sphharm_weights", sphharm_weights)
 
 
     @conditional_grad(torch.enable_grad())
@@ -369,12 +366,7 @@ class eSCNEfficient(BaseModel):
         if self.show_timing_info is True:
             torch.cuda.synchronize()
             print(
-                "{} Time: {}\tMemory: {}\t{}".format(
-                    self.counter,
-                    time.time() - start_time,
-                    len(data.pos),
-                    torch.cuda.max_memory_allocated() / 1000000,
-                )
+                f"{self.counter} Time: {time.time() - start_time}\tMemory: {len(data.pos)}\t{torch.cuda.max_memory_allocated() / 1000000}"
             )
 
         self.counter = self.counter + 1

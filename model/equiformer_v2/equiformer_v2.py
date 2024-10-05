@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import math
+
 import torch
 import torch.nn as nn
-
 from ocpmodels.common.registry import registry
 from ocpmodels.common.utils import conditional_grad
 from ocpmodels.models.base import BaseModel
@@ -12,31 +14,30 @@ try:
 except ImportError:
     pass
 
-from .gaussian_rbf import GaussianRadialBasisLayer
 from .edge_rot_mat import init_edge_rot_mat
-from .so3 import (
-    CoefficientMappingModule,
-    SO3_Embedding,
-    SO3_Grid,
-    SO3_Rotation,
-    SO3_LinearV2
-)
 from .escn_eff import ModuleListInfo
-from .radial_function import RadialFunction
+from .gaussian_rbf import GaussianRadialBasisLayer
+from .input_block import EdgeDegreeEmbedding
 from .layer_norm import (
     EquivariantLayerNormArray,
     EquivariantLayerNormArraySphericalHarmonics,
     EquivariantRMSNormArraySphericalHarmonics,
     EquivariantRMSNormArraySphericalHarmonicsV2,
-    get_normalization_layer
+    get_normalization_layer,
+)
+from .radial_function import RadialFunction
+from .so3 import (
+    CoefficientMappingModule,
+    SO3_Embedding,
+    SO3_Grid,
+    SO3_LinearV2,
+    SO3_Rotation,
 )
 from .transformer_block import (
-    SO2EquivariantGraphAttention,
     FeedForwardNetwork,
+    SO2EquivariantGraphAttention,
     TransBlockV2S,
 )
-from .input_block import EdgeDegreeEmbedding
-
 
 # Statistics of IS2RE 100K
 _AVG_NUM_NODES = 77.81317
@@ -127,7 +128,7 @@ class EquiformerV2S_OC20(BaseModel):
         attn_value_channels=16,
         ffn_hidden_channels=512,
 
-        norm_type='rms_norm_sh',
+        norm_type="rms_norm_sh",
 
         lmax_list=[6],
         mmax_list=[2],
@@ -142,11 +143,11 @@ class EquiformerV2S_OC20(BaseModel):
         distance_function="gaussian",
         num_distance_basis=512,
 
-        attn_activation='scaled_silu',
+        attn_activation="scaled_silu",
         use_tp_reparam=False,
         use_s2_act_attn=False,
         use_attn_renorm=True,
-        ffn_activation='scaled_silu',
+        ffn_activation="scaled_silu",
         use_gate_act=False,
         use_grid_mlp=False,
         use_sep_s2_act=True,
@@ -155,7 +156,7 @@ class EquiformerV2S_OC20(BaseModel):
         drop_path_rate=0.05,
         proj_drop=0.0,
 
-        weight_init='normal',
+        weight_init="normal",
 
         avg_num_nodes=_AVG_NUM_NODES,
         avg_degree=_AVG_DEGREE,
@@ -216,7 +217,7 @@ class EquiformerV2S_OC20(BaseModel):
         self.proj_drop = proj_drop
 
         self.weight_init = weight_init
-        assert self.weight_init in ['normal', 'uniform']
+        assert self.weight_init in ["normal", "uniform"]
 
         self.avg_num_nodes = avg_num_nodes
         self.avg_degree = avg_degree
@@ -229,7 +230,7 @@ class EquiformerV2S_OC20(BaseModel):
             self.use_energy_lin_ref and not self.load_energy_lin_ref
         ), "You can't have use_energy_lin_ref = True and load_energy_lin_ref = False, since the model will not have the parameters for the linear references. All other combinations are fine."
 
-        self.device = 'cpu'  # torch.cuda.current_device()
+        self.device = "cpu"  # torch.cuda.current_device()
 
         self.grad_forces = False
         self.num_resolutions = len(self.lmax_list)
@@ -240,9 +241,9 @@ class EquiformerV2S_OC20(BaseModel):
 
         # Initialize the function used to measure the distances between atoms
         assert self.distance_function in [
-            'gaussian',
+            "gaussian",
         ]
-        if self.distance_function == 'gaussian':
+        if self.distance_function == "gaussian":
             self.distance_expansion = GaussianSmearing(
                 0.0,
                 self.cutoff,
@@ -273,7 +274,7 @@ class EquiformerV2S_OC20(BaseModel):
         self.mappingReduced = CoefficientMappingModule(self.lmax_list, self.mmax_list)
 
         # Initialize the transformations between spherical and grid representations
-        self.SO3_grid = ModuleListInfo('({}, {})'.format(max(self.lmax_list), max(self.lmax_list)))
+        self.SO3_grid = ModuleListInfo(f"({max(self.lmax_list)}, {max(self.lmax_list)})")
         for l in range(max(self.lmax_list) + 1):
             SO3_m_grid = nn.ModuleList()
             for m in range(max(self.lmax_list) + 1):
@@ -282,7 +283,7 @@ class EquiformerV2S_OC20(BaseModel):
                         l,
                         m,
                         resolution=self.grid_resolution,
-                        normalization='component'
+                        normalization="component"
                     )
                 )
             self.SO3_grid.append(SO3_m_grid)
@@ -541,7 +542,7 @@ class EquiformerV2S_OC20(BaseModel):
         ):
             if m.bias is not None:
                 torch.nn.init.constant_(m.bias, 0)
-            if self.weight_init == 'normal':
+            if self.weight_init == "normal":
                 std = 1 / math.sqrt(m.in_features)
                 torch.nn.init.normal_(m.weight, 0, std)
 
@@ -577,9 +578,9 @@ class EquiformerV2S_OC20(BaseModel):
                 for parameter_name, _ in module.named_parameters():
                     if (isinstance(module, torch.nn.Linear)
                         or isinstance(module, SO3_LinearV2)):
-                        if 'weight' in parameter_name:
+                        if "weight" in parameter_name:
                             continue
-                    global_parameter_name = module_name + '.' + parameter_name
+                    global_parameter_name = module_name + "." + parameter_name
                     assert global_parameter_name in named_parameters_list
                     no_wd_list.append(global_parameter_name)
         return set(no_wd_list)

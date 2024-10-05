@@ -1,6 +1,8 @@
-import os
-import torch
+from __future__ import annotations
 
+import os
+
+import torch
 
 # Borrowed from e3nn @ 0.4.0:
 # https://github.com/e3nn/e3nn/blob/0.4.0/e3nn/o3/_wigner.py#L10

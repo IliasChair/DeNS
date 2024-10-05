@@ -1,6 +1,8 @@
-import math
-import torch
+from __future__ import annotations
 
+import math
+
+import torch
 from ocpmodels.common.registry import registry
 from ocpmodels.common.utils import conditional_grad
 
@@ -9,15 +11,11 @@ try:
 except ImportError:
     pass
 
-from .so3 import (
-    SO3_Embedding,
-    SO3_LinearV2
-)
+from .equiformer_v2 import EquiformerV2S_OC20
+from .so3 import SO3_Embedding, SO3_LinearV2
 from .transformer_block import (
     SO2EquivariantGraphAttention,
 )
-from .equiformer_v2 import EquiformerV2S_OC20
-
 
 # Statistics of IS2RE 100K
 _AVG_NUM_NODES = 77.81317
@@ -111,7 +109,7 @@ class EquiformerV2S_OC20_DenoisingPos(EquiformerV2S_OC20):
         attn_value_channels=16,
         ffn_hidden_channels=512,
 
-        norm_type='rms_norm_sh',
+        norm_type="rms_norm_sh",
 
         lmax_list=[6],
         mmax_list=[2],
@@ -126,11 +124,11 @@ class EquiformerV2S_OC20_DenoisingPos(EquiformerV2S_OC20):
         distance_function="gaussian",
         num_distance_basis=512,
 
-        attn_activation='scaled_silu',
+        attn_activation="scaled_silu",
         use_tp_reparam=False,
         use_s2_act_attn=False,
         use_attn_renorm=True,
-        ffn_activation='scaled_silu',
+        ffn_activation="scaled_silu",
         use_gate_act=False,
         use_grid_mlp=False,
         use_sep_s2_act=True,
@@ -139,7 +137,7 @@ class EquiformerV2S_OC20_DenoisingPos(EquiformerV2S_OC20):
         drop_path_rate=0.05,
         proj_drop=0.0,
 
-        weight_init='normal',
+        weight_init="normal",
 
         avg_num_nodes=_AVG_NUM_NODES,
         avg_degree=_AVG_DEGREE,
@@ -215,7 +213,7 @@ class EquiformerV2S_OC20_DenoisingPos(EquiformerV2S_OC20):
         self.use_force_encoding = use_force_encoding
         self.use_noise_schedule_sigma_encoding = use_noise_schedule_sigma_encoding
         self.use_denoising_energy = use_denoising_energy
-        
+
         # for denoising position, encode node-wise forces as node features
         self.irreps_sh = o3.Irreps.spherical_harmonics(lmax=max(self.lmax_list), p=1)
         self.force_embedding = SO3_LinearV2(
@@ -330,7 +328,7 @@ class EquiformerV2S_OC20_DenoisingPos(EquiformerV2S_OC20):
                 l=self.irreps_sh,
                 x=force_data,
                 normalize=True,
-                normalization='component'
+                normalization="component"
             )
             force_sh = force_sh.view(num_atoms, (max(self.lmax_list) + 1) ** 2, 1)
             force_norm = force_data.norm(dim=-1, keepdim=True)
@@ -355,8 +353,8 @@ class EquiformerV2S_OC20_DenoisingPos(EquiformerV2S_OC20):
 
         # noise schedule sigma encoding
         if self.use_noise_schedule_sigma_encoding:
-            if hasattr(data, 'denoising_pos_forward') and data.denoising_pos_forward:
-                assert hasattr(data, 'sigmas')
+            if hasattr(data, "denoising_pos_forward") and data.denoising_pos_forward:
+                assert hasattr(data, "sigmas")
                 sigmas = data.sigmas
             else:
                 sigmas = torch.zeros((num_atoms, 1), dtype=data.pos.dtype, device=data.pos.device)

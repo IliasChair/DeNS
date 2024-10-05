@@ -10,11 +10,11 @@ TODO:
     2. Remove indexing when the shape is the same.
     3. Move some functions outside classes and to separate files.
 """
+from __future__ import annotations
 
-import os
 import math
+
 import torch
-import torch.nn as nn
 
 try:
     from e3nn import o3
@@ -22,8 +22,9 @@ try:
 except ImportError:
     pass
 
-from .wigner import wigner_D
 from torch.nn import Linear
+
+from .wigner import wigner_D
 
 
 class CoefficientMappingModule(torch.nn.Module):
@@ -47,7 +48,7 @@ class CoefficientMappingModule(torch.nn.Module):
         self.num_resolutions = len(lmax_list)
 
         # Temporarily use `cpu` as device and this will be overwritten.
-        self.device = 'cpu'
+        self.device = "cpu"
 
         # Compute the degree (l) and order (m) for each entry of the embedding
         l_harmonic = torch.tensor([], device=self.device).long()
@@ -58,7 +59,7 @@ class CoefficientMappingModule(torch.nn.Module):
 
         offset = 0
         for i in range(self.num_resolutions):
-            for l in range(0, self.lmax_list[i] + 1):
+            for l in range(self.lmax_list[i] + 1):
                 mmax = min(self.mmax_list[i], l)
                 m = torch.arange(-mmax, mmax + 1, device=self.device).long()
                 m_complex = torch.cat([m_complex, m], dim=0)
@@ -95,12 +96,12 @@ class CoefficientMappingModule(torch.nn.Module):
         to_m = to_m.detach()
 
         # save tensors and they will be moved to GPU
-        self.register_buffer('l_harmonic', l_harmonic)
-        self.register_buffer('m_harmonic', m_harmonic)
-        self.register_buffer('m_complex',  m_complex)
-        self.register_buffer('res_size',   res_size)
-        self.register_buffer('to_m',       to_m)
-        self.register_buffer('m_size',     m_size)
+        self.register_buffer("l_harmonic", l_harmonic)
+        self.register_buffer("m_harmonic", m_harmonic)
+        self.register_buffer("m_complex",  m_complex)
+        self.register_buffer("res_size",   res_size)
+        self.register_buffer("to_m",       to_m)
+        self.register_buffer("m_size",     m_size)
 
         # for caching the output of `coefficient_idx`
         self.lmax_cache, self.mmax_cache = None, None
@@ -110,10 +111,10 @@ class CoefficientMappingModule(torch.nn.Module):
 
     # Return mask containing coefficients of order m (real and imaginary parts)
     def complex_idx(self, m, lmax, m_complex, l_harmonic):
-        '''
+        """
             Add `m_complex` and `l_harmonic` to the input arguments
             since we cannot use `self.m_complex`.
-        '''
+        """
         if lmax == -1:
             lmax = max(self.lmax_list)
 
@@ -183,7 +184,7 @@ class CoefficientMappingModule(torch.nn.Module):
         return f"{self.__class__.__name__}(lmax_list={self.lmax_list}, mmax_list={self.mmax_list})"
 
 
-class SO3_Embedding():
+class SO3_Embedding:
     """
     Helper functions for performing operations on irreps embedding
 
@@ -494,7 +495,7 @@ class SO3_Grid(torch.nn.Module):
         self,
         lmax,
         mmax,
-        normalization='integral',
+        normalization="integral",
         resolution=None,
     ):
         super().__init__()
@@ -511,7 +512,7 @@ class SO3_Grid(torch.nn.Module):
 
         self.mapping = CoefficientMappingModule([self.lmax], [self.lmax])
 
-        device = 'cpu'
+        device = "cpu"
 
         to_grid = ToS2Grid(
             self.lmax,
@@ -550,8 +551,8 @@ class SO3_Grid(torch.nn.Module):
         from_grid_mat = from_grid_mat[:, :, self.mapping.coefficient_idx(self.lmax, self.mmax)]
 
         # save tensors and they will be moved to GPU
-        self.register_buffer('to_grid_mat',   to_grid_mat)
-        self.register_buffer('from_grid_mat', from_grid_mat)
+        self.register_buffer("to_grid_mat",   to_grid_mat)
+        self.register_buffer("from_grid_mat", from_grid_mat)
 
 
     # Compute matrices to transform irreps to grid
@@ -624,10 +625,10 @@ class SO3_Linear(torch.nn.Module):
 
 class SO3_LinearV2(torch.nn.Module):
     def __init__(self, in_features, out_features, lmax, bias=True):
-        '''
+        """
             1. Use `torch.einsum` to prevent slicing and concatenation
             2. Need to specify some behaviors in `no_weight_decay` and weight initialization.
-        '''
+        """
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
@@ -643,13 +644,13 @@ class SO3_LinearV2(torch.nn.Module):
             start_idx = l ** 2
             length = 2 * l + 1
             expand_index[start_idx : (start_idx + length)] = l
-        self.register_buffer('expand_index', expand_index)
+        self.register_buffer("expand_index", expand_index)
 
 
     def forward(self, input_embedding):
 
         weight = torch.index_select(self.weight, dim=0, index=self.expand_index) # [(L_max + 1) ** 2, C_out, C_in]
-        out = torch.einsum('bmi, moi -> bmo', input_embedding.embedding, weight) # [N, (L_max + 1) ** 2, C_out]
+        out = torch.einsum("bmi, moi -> bmo", input_embedding.embedding, weight) # [N, (L_max + 1) ** 2, C_out]
         bias = self.bias.view(1, 1, self.out_features)
         out[:, 0:1, :] = out.narrow(1, 0, 1) + bias
 

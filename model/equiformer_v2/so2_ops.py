@@ -1,11 +1,14 @@
+from __future__ import annotations
+
+import copy
+import math
+
 import torch
 import torch.nn as nn
-import math
-import copy
-
 from torch.nn import Linear
-from .so3 import SO3_Embedding
+
 from .radial_function import RadialFunction
+from .so3 import SO3_Embedding
 
 
 class SO2_m_Convolution(torch.nn.Module):

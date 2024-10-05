@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import torch
 
 
@@ -41,5 +43,4 @@ class GaussianRadialBasisLayer(torch.nn.Module):
 
 
     def extra_repr(self):
-        return 'mean_init_max={}, mean_init_min={}, std_init_max={}, std_init_min={}'.format(
-            self.mean_init_max, self.mean_init_min, self.std_init_max, self.std_init_min)
+        return f"mean_init_max={self.mean_init_max}, mean_init_min={self.mean_init_min}, std_init_max={self.std_init_max}, std_init_min={self.std_init_min}"

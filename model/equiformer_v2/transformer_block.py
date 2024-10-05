@@ -1,38 +1,26 @@
+from __future__ import annotations
+
+import copy
+import math
+
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import math
 import torch_geometric
-import copy
 
 from .activation import (
-    ScaledSiLU,
-    ScaledSwiGLU,
-    SwiGLU,
-    ScaledSmoothLeakyReLU,
-    SmoothLeakyReLU,
     GateActivation,
+    S2Activation,
     SeparableS2Activation,
-    S2Activation
+    SmoothLeakyReLU,
 )
+from .drop import EquivariantDropoutArraySphericalHarmonics, GraphDropPath
 from .layer_norm import (
-    EquivariantLayerNormArray,
-    EquivariantLayerNormArraySphericalHarmonics,
-    EquivariantRMSNormArraySphericalHarmonics,
-    get_normalization_layer
-)
-from .so2_ops import SO2_Convolution
-from .so2_tp import SO2_Convolution_TensorProduct
-from .so3 import (
-    SO3_Embedding,
-    SO3_Linear,
-    SO3_LinearV2
+    get_normalization_layer,
 )
 from .radial_function import RadialFunction
-from .drop import (
-    GraphDropPath,
-    EquivariantDropoutArraySphericalHarmonics
-)
+from .so2_ops import SO2_Convolution
+from .so2_tp import SO2_Convolution_TensorProduct
+from .so3 import SO3_Embedding, SO3_LinearV2
 
 
 class SO2EquivariantGraphAttention(torch.nn.Module):
@@ -88,7 +76,7 @@ class SO2EquivariantGraphAttention(torch.nn.Module):
         edge_channels_list,
         use_atom_edge_embedding=True,
         use_m_share_rad=False,
-        activation='scaled_silu',
+        activation="scaled_silu",
         use_tp_reparam=False,
         use_s2_act_attn=False,
         use_attn_renorm=True,
@@ -155,7 +143,7 @@ class SO2EquivariantGraphAttention(torch.nn.Module):
             #    length = 2 * l + 1
             #    expand_index[start_idx : (start_idx + length)] = l
             expand_index = self.mappingReduced.l_harmonic.clone()
-            self.register_buffer('expand_index', expand_index)
+            self.register_buffer("expand_index", expand_index)
 
         if self.use_tp_reparam:
             so2_convolution_class = SO2_Convolution_TensorProduct
@@ -316,7 +304,7 @@ class SO2EquivariantGraphAttention(torch.nn.Module):
             x_0_alpha = x_0_alpha.view(-1, self.num_heads, self.attn_alpha_channels)
             x_0_alpha = self.alpha_norm(x_0_alpha)
             x_0_alpha = self.alpha_act(x_0_alpha)
-            alpha = torch.einsum('bik, ik -> bi', x_0_alpha, self.alpha_dot)
+            alpha = torch.einsum("bik, ik -> bi", x_0_alpha, self.alpha_dot)
         alpha = torch_geometric.utils.softmax(alpha, edge_index[1])
         alpha = alpha.view(alpha.shape[0], 1, self.num_heads, 1)
         if self.alpha_dropout is not None:
@@ -369,7 +357,7 @@ class FeedForwardNetwork(torch.nn.Module):
         lmax_list,
         mmax_list,
         SO3_grid,
-        activation='scaled_silu',
+        activation="scaled_silu",
         use_gate_act=False,
         use_grid_mlp=False,
         use_sep_s2_act=True
@@ -521,16 +509,16 @@ class TransBlockV2S(torch.nn.Module):
         use_atom_edge_embedding=True,
         use_m_share_rad=False,
 
-        attn_activation='silu',
+        attn_activation="silu",
         use_tp_reparam=False,
         use_s2_act_attn=False,
         use_attn_renorm=True,
-        ffn_activation='silu',
+        ffn_activation="silu",
         use_gate_act=False,
         use_grid_mlp=False,
         use_sep_s2_act=True,
 
-        norm_type='rms_norm_sh',
+        norm_type="rms_norm_sh",
 
         alpha_drop=0.0,
         drop_path_rate=0.0,
